@@ -6,6 +6,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 
+	"github.com/longhorn/longhorn-manager/cache"
 	"github.com/longhorn/longhorn-manager/controller"
 	"github.com/longhorn/longhorn-manager/datastore"
 	"github.com/longhorn/longhorn-manager/engineapi"
@@ -25,6 +26,8 @@ type VolumeCollector struct {
 	robustnessMetric metricInfo
 
 	volumePerfMetrics
+
+	mc *cache.MetricsCache
 }
 
 type volumePerfMetrics struct {
@@ -41,11 +44,13 @@ type rwMetrics struct {
 func NewVolumeCollector(
 	logger logrus.FieldLogger,
 	nodeID string,
-	ds *datastore.DataStore) *VolumeCollector {
+	ds *datastore.DataStore,
+	mc *cache.MetricsCache) *VolumeCollector {
 
 	vc := &VolumeCollector{
 		baseCollector:    newBaseCollector(subsystemVolume, logger, nodeID, ds),
 		proxyConnCounter: util.NewAtomicCounter(),
+		mc:               mc,
 	}
 
 	vc.capacityMetric = metricInfo{
@@ -185,6 +190,7 @@ func (vc *VolumeCollector) Collect(ch chan<- prometheus.Metric) {
 					defer engineClientProxy.Close()
 
 					metrics, err = engineClientProxy.MetricsGet(e)
+					vc.mc.PutVolumeMetrics(v.Name, metrics)
 					if err != nil {
 						vc.logger.WithError(err).Warnf("Failed to get metrics from volume %v from engine %v", e.Spec.VolumeName, e.Name)
 					}

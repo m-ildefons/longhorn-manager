@@ -823,3 +823,36 @@ func (s *Server) VolumeUpdateSnapshotMaxSize(rw http.ResponseWriter, req *http.R
 	}
 	return s.responseWithVolume(rw, req, "", v)
 }
+
+type VolumeMetrics struct {
+	ReadThroughput  int `json:"readThroughput"`
+	WriteThroughput int `json:"writeThroughput"`
+	ReadLatency     int `json:"readLatency"`
+	WriteLatency    int `json:"writeLatency"`
+	ReadIOPS        int `json:"readIOPS"`
+	WriteIOPS       int `json:"writeIOPS"`
+}
+
+func (s *Server) volumeMetrics(apiContext *api.ApiContext, req *http.Request) (*client.GenericCollection, error) {
+	var data []interface{}
+
+	name := mux.Vars(req)["name"]
+
+	metrics := &VolumeMetrics{
+		ReadThroughput:  int(s.c.Get(s.c.Key("volume", name, "read_throughput"))),
+		WriteThroughput: int(s.c.Get(s.c.Key("volume", name, "write_throughput"))),
+		ReadLatency:     int(s.c.Get(s.c.Key("volume", name, "read_latency"))),
+		WriteLatency:    int(s.c.Get(s.c.Key("volume", name, "write_latency"))),
+		ReadIOPS:        int(s.c.Get(s.c.Key("volume", name, "read_iops"))),
+		WriteIOPS:       int(s.c.Get(s.c.Key("volume", name, "write_iops"))),
+	}
+	data = append(data, metrics)
+
+	resp := &client.GenericCollection{
+		Data:       data,
+		Collection: client.Collection{ResourceType: "volumeMetrics"},
+	}
+	apiContext.Write(resp)
+
+	return resp, nil
+}

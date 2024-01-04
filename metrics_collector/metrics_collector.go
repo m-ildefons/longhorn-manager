@@ -11,6 +11,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metricsclientset "k8s.io/metrics/pkg/client/clientset/versioned"
 
+	"github.com/longhorn/longhorn-manager/cache"
 	"github.com/longhorn/longhorn-manager/datastore"
 	"github.com/longhorn/longhorn-manager/metrics_collector/registry"
 	"github.com/longhorn/longhorn-manager/types"
@@ -20,10 +21,10 @@ import (
 	_ "github.com/longhorn/longhorn-manager/metrics_collector/workqueue"        // load the workqueue metrics
 )
 
-func InitMetricsCollectorSystem(logger logrus.FieldLogger, currentNodeID string, ds *datastore.DataStore, kubeconfigPath string, proxyConnCounter util.Counter) {
+func InitMetricsCollectorSystem(logger logrus.FieldLogger, currentNodeID string, ds *datastore.DataStore, mc *cache.MetricsCache, kubeconfigPath string, proxyConnCounter util.Counter) {
 	logger.Info("Initializing metrics collector system")
 
-	volumeCollector := NewVolumeCollector(logger, currentNodeID, ds)
+	volumeCollector := NewVolumeCollector(logger, currentNodeID, ds, mc)
 	diskCollector := NewDiskCollector(logger, currentNodeID, ds)
 	backupCollector := NewBackupCollector(logger, currentNodeID, ds)
 	snapshotController := NewSnapshotCollector(logger, currentNodeID, ds)

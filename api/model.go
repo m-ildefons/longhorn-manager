@@ -12,6 +12,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 
+	"github.com/longhorn/longhorn-manager/cache"
 	"github.com/longhorn/longhorn-manager/controller"
 	"github.com/longhorn/longhorn-manager/datastore"
 	"github.com/longhorn/longhorn-manager/engineapi"
@@ -1850,13 +1851,15 @@ func toBackingImageCollection(bis []*longhorn.BackingImage, apiContext *api.ApiC
 
 type Server struct {
 	m   *manager.VolumeManager
+	c   *cache.MetricsCache
 	wsc *controller.WebsocketController
 	fwd *Fwd
 }
 
-func NewServer(m *manager.VolumeManager, wsc *controller.WebsocketController) *Server {
+func NewServer(m *manager.VolumeManager, c *cache.MetricsCache, wsc *controller.WebsocketController) *Server {
 	s := &Server{
 		m:   m,
+		c:   c,
 		wsc: wsc,
 		fwd: NewFwd(m),
 	}

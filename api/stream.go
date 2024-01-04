@@ -31,6 +31,103 @@ func init() {
 	rand.Seed(time.Now().UnixNano())
 }
 
+func NewStreamFunc(
+	streamType string,
+	watcher *controller.Watcher,
+	lister func(*api.ApiContext, *http.Request) (*client.GenericCollection, error)) func(w http.ResponseWriter, r *http.Request) error {
+	return func(rw http.ResponseWriter, req *http.Request) error {
+		conn, err := upgrader.Upgrade(rw, req, nil)
+		if err != nil {
+			return err
+		}
+
+		fields := logrus.Fields{
+			"id":   strconv.Itoa(rand.Int()),
+			"type": streamType,
+		}
+		logrus.WithFields(fields).Debug("")
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			for {
+				_, _, err := conn.ReadMessage()
+				if err != nil {
+					logrus.WithFields(fields).Warn(err.Error())
+					return
+				}
+			}
+		}()
+
+		ctx := api.GetApiContext(req)
+		resp, err := writer(conn, nil, lister, ctx, req)
+		if err != nil {
+			return err
+		}
+
+		rateLimitTicker := maybeNewTicker(getPeriod(req))
+		if rateLimitTicker != nil {
+			defer rateLimitTicker.Stop()
+		}
+
+		keepAliveTicker := time.NewTicker(keepAlivePeriod)
+		defer keepAliveTicker.Stop()
+
+		for {
+			if rateLimitTicker != nil {
+				<-rateLimitTicker.C
+			}
+
+			select {
+			case <-done:
+				return nil
+			case <-watcher.Events():
+				resp, err = writer(conn, resp, lister, ctx, req)
+			case <-keepAliveTicker.C:
+				err = conn.WriteControl(websocket.PingMessage, []byte{}, time.Now().Add(writeWait))
+				// WebsocketController doesn't include eventInformer so it only
+				// gets triggered here.
+				if streamType == "events" {
+					resp, err = writer(conn, resp, lister, ctx, req)
+				}
+			}
+			if err != nil {
+				return err
+			}
+		}
+	}
+}
+
+func writer(
+	conn *websocket.Conn,
+	oldResp *client.GenericCollection,
+	lister func(*api.ApiContext, *http.Request) (*client.GenericCollection, error), ctx *api.ApiContext, req *http.Request) (*client.GenericCollection, error) {
+	newResp, err := lister(ctx, req)
+	if err != nil {
+		return oldResp, err
+	}
+
+	if oldResp != nil && reflect.DeepEqual(oldResp, newResp) {
+		return oldResp, nil
+	}
+
+	data, err := ctx.PopulateCollection(newResp)
+	if err != nil {
+		return oldResp, err
+	}
+
+	err = conn.SetWriteDeadline(time.Now().Add(writeWait))
+	if err != nil {
+		return oldResp, err
+	}
+
+	err = conn.WriteJSON(data)
+	if err != nil {
+		return oldResp, err
+	}
+
+	return newResp, nil
+}
+
 func NewStreamHandlerFunc(streamType string, watcher *controller.Watcher, listFunc func(ctx *api.ApiContext) (*client.GenericCollection, error)) func(w http.ResponseWriter, r *http.Request) error {
 	return func(w http.ResponseWriter, r *http.Request) error {
 		conn, err := upgrader.Upgrade(w, r, nil)

@@ -207,6 +207,10 @@ func NewRouter(s *Server) *mux.Router {
 	r.Path("/v1/ws/volumes").Handler(f(schemas, volumeListStream))
 	r.Path("/v1/ws/{period}/volumes").Handler(f(schemas, volumeListStream))
 
+	volumeMetricsStream := NewStreamFunc("volumesMetrics", s.wsc.NewWatcher("volumeMetrics"), s.volumeMetrics)
+	r.Path("/v1/ws/volumes/{name}/metrics").Handler(f(schemas, volumeMetricsStream))
+	r.Path("/v1/ws/{period}/volumes/{name}/metrics").Handler(f(schemas, volumeMetricsStream))
+
 	recurringJobListStream := NewStreamHandlerFunc("recurringjobs", s.wsc.NewWatcher("recurringJob"), s.recurringJobList)
 	r.Path("/v1/ws/recurringjobs").Handler(f(schemas, recurringJobListStream))
 	r.Path("/v1/ws/{period}/recurringjobs").Handler(f(schemas, recurringJobListStream))

@@ -20,11 +20,12 @@ import (
 	lhtypes "github.com/longhorn/go-common-libs/types"
 
 	"github.com/longhorn/longhorn-manager/api"
+	"github.com/longhorn/longhorn-manager/cache"
 	"github.com/longhorn/longhorn-manager/controller"
 	"github.com/longhorn/longhorn-manager/datastore"
 	"github.com/longhorn/longhorn-manager/manager"
 	"github.com/longhorn/longhorn-manager/meta"
-	"github.com/longhorn/longhorn-manager/recovery_backend"
+	recoverybackend "github.com/longhorn/longhorn-manager/recovery_backend"
 	"github.com/longhorn/longhorn-manager/types"
 	"github.com/longhorn/longhorn-manager/upgrade"
 	"github.com/longhorn/longhorn-manager/util"
@@ -173,8 +174,9 @@ func startManager(c *cli.Context) error {
 	}
 
 	m := manager.NewVolumeManager(currentNodeID, clients.Datastore, proxyConnCounter)
+	metricsCache := cache.NewMetricsCache()
 
-	metricscollector.InitMetricsCollectorSystem(logger, currentNodeID, clients.Datastore, kubeconfigPath, proxyConnCounter)
+	metricscollector.InitMetricsCollectorSystem(logger, currentNodeID, clients.Datastore, metricsCache, kubeconfigPath, proxyConnCounter)
 
 	defaultImageSettings := map[types.SettingName]string{
 		types.SettingNameDefaultEngineImage:              engineImage,
@@ -198,7 +200,7 @@ func startManager(c *cli.Context) error {
 		return err
 	}
 
-	server := api.NewServer(m, wsc)
+	server := api.NewServer(m, metricsCache, wsc)
 	router := http.Handler(api.NewRouter(server))
 	router = util.FilteredLoggingHandler(map[string]struct{}{
 		"/v1/apiversions":  {},
